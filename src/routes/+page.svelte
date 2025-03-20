@@ -75,12 +75,12 @@
             </div>
             <div class="items">
                 <div class="item">TOKENS: {score/10}/{totalTokens}</div>
-                <div class="item danger">MONSTERS: 3</div>
+                <div class="item danger">JENSEN CLONES: 3</div>
             </div>
         </div>
         
         <div class="bottom-bar">
-            <div class="message-box">BEWARE: Red monsters will chase you! Use the wide corridors to evade them and collect all tokens!</div>
+            <div class="message-box">DANGER: Jensen clones are hunting you! Use the wide corridors to evade them and collect all tokens to escape!</div>
             <div class="controls-hint">
                 <span>W/UP - Forward</span>
                 <span>S/DOWN - Back</span>

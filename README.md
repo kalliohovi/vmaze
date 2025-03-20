@@ -1,47 +1,40 @@
-# Svelte + TS + Vite
+# VMaze
 
-This template should help get you started developing with Svelte and TypeScript in Vite.
+A meme horror retro-style 3D maze game created with +80% with the help of AI for a game jam contest. This project is currently a work in progress.
 
-## Recommended IDE Setup
+## Game Description
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode).
+VMaze is a first-person maze exploration game inspired by classic 90's 3D games like Elder Scrolls: Arena. Navigate through a maze while collecting tokens and avoiding the menacing "Jensen clones" that hunt you down.
 
-## Need an official Svelte framework?
+## Features
+- Classic 90's Aesthetics: Low-poly models, pixelated rendering, and fog effects for that authentic retro feel
+- First-Person Exploration: Navigate through a 3D maze with WASD/arrow keys
+- Token Collection: Gather tokens throughout the maze to increase your score
+- Enemy AI: Evade the Jensen clones that pursue you through the corridors
+- Retro UI: Elder Scrolls Arena-inspired interface with compass, stats, and inventory
+- Custom Sound Effects: Atmospheric sound design including:
+  - Background music
+  - Token collection sounds
+  - Enemy proximity warnings
+  - Capture alerts
+- Controls
+  - W/Up Arrow: Move forward
+  - S/Down Arrow: Move backward
+  - A/Left Arrow: Turn left
+  - D/Right Arrow: Turn right
 
-Check out [SvelteKit](https://github.com/sveltejs/kit#readme), which is also powered by Vite. Deploy anywhere with its serverless-first approach and adapt to various platforms, with out of the box support for TypeScript, SCSS, and Less, and easily-added support for mdsvex, GraphQL, PostCSS, Tailwind CSS, and more.
+## Development Status
 
-## Technical considerations
+This game is currently being developed for a game jam competition and is not yet complete. Future updates may include additional levels, more enemies, and expanded gameplay mechanics.
 
-**Why use this over SvelteKit?**
+## Tech Stack
 
-- It brings its own routing solution which might not be preferable for some users.
-- It is first and foremost a framework that just happens to use Vite under the hood, not a Vite app.
+- Svelte
+- TypeScript
+- Three.js
+- Vite
 
-This template contains as little as possible to get started with Vite + TypeScript + Svelte, while taking into account the developer experience with regards to HMR and intellisense. It demonstrates capabilities on par with the other `create-vite` templates and is a good starting point for beginners dipping their toes into a Vite + Svelte project.
+## Running Locally
 
-Should you later need the extended capabilities and extensibility provided by SvelteKit, the template has been structured similarly to SvelteKit so that it is easy to migrate.
-
-**Why `global.d.ts` instead of `compilerOptions.types` inside `jsconfig.json` or `tsconfig.json`?**
-
-Setting `compilerOptions.types` shuts out all other types not explicitly listed in the configuration. Using triple-slash references keeps the default TypeScript setting of accepting type information from the entire workspace, while also adding `svelte` and `vite/client` type information.
-
-**Why include `.vscode/extensions.json`?**
-
-Other templates indirectly recommend extensions via the README, but this file allows VS Code to prompt the user to install the recommended extension upon opening the project.
-
-**Why enable `allowJs` in the TS template?**
-
-While `allowJs: false` would indeed prevent the use of `.js` files in the project, it does not prevent the use of JavaScript syntax in `.svelte` files. In addition, it would force `checkJs: false`, bringing the worst of both worlds: not being able to guarantee the entire codebase is TypeScript, and also having worse typechecking for the existing JavaScript. In addition, there are valid use cases in which a mixed codebase may be relevant.
-
-**Why is HMR not preserving my local component state?**
-
-HMR state preservation comes with a number of gotchas! It has been disabled by default in both `svelte-hmr` and `@sveltejs/vite-plugin-svelte` due to its often surprising behavior. You can read the details [here](https://github.com/rixo/svelte-hmr#svelte-hmr).
-
-If you have state that's important to retain within a component, consider creating an external store which would not be replaced by HMR.
-
-```ts
-// store.ts
-// An extremely simple external store
-import { writable } from 'svelte/store'
-export default writable(0)
-```
+Apply to README.md
+Then navigate to the local server address shown in the terminal (usually http://localhost:5173/)

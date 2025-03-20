@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export class Game {
     private scene: THREE.Scene;
@@ -12,12 +13,13 @@ export class Game {
         speed: number;
         rotationSpeed: number;
     };
-    private tokens: THREE.Mesh[] = [];
+    private tokens: THREE.Object3D[] = [];
     private monsters: {
-        mesh: THREE.Mesh;
+        mesh: THREE.Object3D;
         position: THREE.Vector3;
         speed: number;
         target: THREE.Vector3;
+        lastSoundTime: number;
     }[] = [];
     private keys: Set<string> = new Set();
     private score: number = 0;
@@ -31,6 +33,19 @@ export class Game {
     private mazeSize: number = 35; // Even larger maze
     private cellSize: number = 3.5; // Wider cells
     private wallThickness: number = 0.5; // For thinner walls
+    private gltfLoader = new GLTFLoader();
+    private tokenModel: THREE.Object3D | null = null;
+    private jensenModel: THREE.Object3D | null = null;
+    private modelsLoaded: boolean = false;
+    private tokenPositions: number[][] = [];
+    private monsterPositions: number[][] = [];
+    
+    // Audio system
+    private audioContext: AudioContext | null = null;
+    private sounds: { [key: string]: AudioBuffer } = {};
+    private musicSource: AudioBufferSourceNode | null = null;
+    private backgroundMusic: AudioBuffer | null = null;
+    private lastTokenSound: number = 1; // Toggle between token sounds
 
     constructor(
         container: HTMLElement, 
@@ -40,6 +55,9 @@ export class Game {
         this.onScoreUpdate = onScoreUpdate;
         this.onRotationUpdate = onRotationUpdate;
         this.clock = new THREE.Clock();
+        
+        // Initialize audio system
+        this.initAudio();
         
         // Scene setup
         this.scene = new THREE.Scene();
@@ -77,10 +95,21 @@ export class Game {
         // Raycaster for collision detection
         this.raycaster = new THREE.Raycaster();
 
-        // Initialize game objects
+        // Initialize maze
         this.initializeMaze();
-        this.initializeTokens();
-        this.initializeMonsters();
+        
+        // Set up token positions
+        this.setupTokenPositions();
+        
+        // Set up monster positions
+        this.setupMonsterPositions();
+        
+        // Load models then initialize game objects
+        this.loadModels().then(() => {
+            this.initializeTokens();
+            this.initializeMonsters();
+            this.modelsLoaded = true;
+        });
 
         // Handle window resize
         window.addEventListener('resize', this.onWindowResize.bind(this));
@@ -91,6 +120,133 @@ export class Game {
         
         // Initial rotation update
         this.onRotationUpdate(this.player.rotation);
+    }
+    
+    private async initAudio() {
+        try {
+            // Create audio context with a user interaction to comply with autoplay policies
+            const setupAudio = () => {
+                if (!this.audioContext) {
+                    this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+                    
+                    // Load all sound files
+                    this.loadSound('background', '/static/sounds/background_loop.mp3');
+                    this.loadSound('jensenClose', '/static/sounds/jensen-close_sound.mp3');
+                    this.loadSound('tokenAdded1', '/static/sounds/tokens-added_1.mp3');
+                    this.loadSound('tokenAdded2', '/static/sounds/token_added_2.mp3');
+                    this.loadSound('jensenCatch', '/static/sounds/jensen_catch_sound.mp3');
+                    
+                    // Remove event listeners once audio is initialized
+                    window.removeEventListener('click', setupAudio);
+                    window.removeEventListener('keydown', setupAudio);
+                }
+            };
+            
+            // Add event listeners to initialize audio on first user interaction
+            window.addEventListener('click', setupAudio);
+            window.addEventListener('keydown', setupAudio);
+            
+        } catch (error) {
+            console.error('Audio initialization failed:', error);
+        }
+    }
+    
+    private async loadSound(name: string, url: string) {
+        if (!this.audioContext) return;
+        
+        try {
+            const response = await fetch(url);
+            const arrayBuffer = await response.arrayBuffer();
+            const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+            
+            this.sounds[name] = audioBuffer;
+            
+            // If it's background music, store it separately and start it
+            if (name === 'background') {
+                this.backgroundMusic = audioBuffer;
+                this.playBackgroundMusic();
+            }
+            
+            console.log(`Loaded sound: ${name}`);
+        } catch (error) {
+            console.error(`Error loading sound ${name}:`, error);
+        }
+    }
+    
+    private playSound(name: string, volume: number = 1.0) {
+        if (!this.audioContext || !this.sounds[name]) return;
+        
+        try {
+            const source = this.audioContext.createBufferSource();
+            source.buffer = this.sounds[name];
+            
+            const gainNode = this.audioContext.createGain();
+            gainNode.gain.value = volume;
+            
+            source.connect(gainNode);
+            gainNode.connect(this.audioContext.destination);
+            
+            source.start(0);
+        } catch (error) {
+            console.error(`Error playing sound ${name}:`, error);
+        }
+    }
+    
+    private playBackgroundMusic() {
+        if (!this.audioContext || !this.backgroundMusic) return;
+        
+        try {
+            // Stop any existing music
+            if (this.musicSource) {
+                this.musicSource.stop();
+            }
+            
+            // Create a new source for the music
+            this.musicSource = this.audioContext.createBufferSource();
+            this.musicSource.buffer = this.backgroundMusic;
+            this.musicSource.loop = true;
+            
+            // Create a gain node for volume control
+            const gainNode = this.audioContext.createGain();
+            gainNode.gain.value = 0.3; // Lower volume for background music
+            
+            // Connect and start
+            this.musicSource.connect(gainNode);
+            gainNode.connect(this.audioContext.destination);
+            this.musicSource.start(0);
+        } catch (error) {
+            console.error('Error playing background music:', error);
+        }
+    }
+    
+    private async loadModels() {
+        try {
+            // Load token model
+            const tokenGltf = await this.loadGLTFModel('/static/models/token.glb');
+            this.tokenModel = tokenGltf.scene.children[0];
+            
+            // Load Jensen model
+            const jensenGltf = await this.loadGLTFModel('/static/models/jensen.glb');
+            this.jensenModel = jensenGltf.scene.children[0];
+            
+            console.log('Models loaded successfully');
+        } catch (error) {
+            console.error('Error loading models:', error);
+            // Use fallback geometries if models fail to load
+            this.tokenModel = null;
+            this.jensenModel = null;
+        }
+    }
+    
+    private loadGLTFModel(url: string): Promise<any> {
+        return new Promise((resolve, reject) => {
+            this.gltfLoader.load(
+                url,
+                (gltf) => resolve(gltf),
+                (xhr) => console.log(`${url} ${(xhr.loaded / xhr.total * 100)}% loaded`),
+                (error) => reject(error)
+            );
+        });
     }
 
     private initializeMaze() {
@@ -181,18 +337,10 @@ export class Game {
         // Update camera to match player position
         this.camera.position.copy(this.player.position);
     }
-
-    private initializeTokens() {
-        const tokenGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.1, 8); // Less segments for retro look
-        const tokenMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0xffff00,
-            emissive: 0x777700, // Glow effect
-            roughness: 0.3,
-            metalness: 0.7
-        });
-
+    
+    private setupTokenPositions() {
         // Define token positions throughout the maze (grid coordinates)
-        const tokenPositions = [
+        this.tokenPositions = [
             // Row 1 - First open corridor
             [1, 0.7, 1], [2, 0.7, 1], [3, 0.7, 1], [4, 0.7, 1], 
             [5, 0.7, 1], [6, 0.7, 1], [7, 0.7, 1], [8, 0.7, 1], [9, 0.7, 1],
@@ -215,56 +363,121 @@ export class Game {
             [1, 0.7, 9], [2, 0.7, 9], [3, 0.7, 9], [4, 0.7, 9], 
             [5, 0.7, 9], [6, 0.7, 9], [7, 0.7, 9], [8, 0.7, 9], [9, 0.7, 9],
         ];
-
-        const halfMazeSize = this.mazeSize / 2;
-        tokenPositions.forEach(pos => {
-            const token = new THREE.Mesh(tokenGeometry, tokenMaterial);
-            // Calculate world position from grid coordinates
-            const x = (pos[0] * this.cellSize) - halfMazeSize + (this.cellSize / 2);
-            const y = pos[1]; // Height above floor
-            const z = (pos[2] * this.cellSize) - halfMazeSize + (this.cellSize / 2);
-            token.position.set(x, y, z);
-            token.rotation.x = Math.PI / 2;
-            this.tokens.push(token);
-            this.scene.add(token);
-        });
     }
-
-    private initializeMonsters() {
-        // Create monsters that will chase the player
-        const monsterGeometry = new THREE.SphereGeometry(0.5, 8, 8); // Low poly for retro look
-        const monsterMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0xff0000,
-            emissive: 0x330000, // Slight glow
-            roughness: 0.7,
-            metalness: 0.3
-        });
-        
+    
+    private setupMonsterPositions() {
         // Monster starting positions (grid coordinates)
-        const monsterPositions = [
+        this.monsterPositions = [
             [9, 1.5, 1], // Top right
             [1, 1.5, 9], // Bottom left  
             [9, 1.5, 9]  // Bottom right
         ];
-        
+    }
+
+    private initializeTokens() {
         const halfMazeSize = this.mazeSize / 2;
-        monsterPositions.forEach(pos => {
-            const monsterMesh = new THREE.Mesh(monsterGeometry, monsterMaterial);
-            // Calculate world position from grid coordinates
-            const x = (pos[0] * this.cellSize) - halfMazeSize + (this.cellSize / 2);
-            const y = pos[1]; // Height (eye level)
-            const z = (pos[2] * this.cellSize) - halfMazeSize + (this.cellSize / 2);
-            monsterMesh.position.set(x, y, z);
-            
-            this.monsters.push({
-                mesh: monsterMesh,
-                position: new THREE.Vector3(x, y, z),
-                speed: 1.5, // A bit faster but still slower than player
-                target: this.player.position.clone()
+        
+        // If we have the loaded model, use it, otherwise fallback to simple geometry
+        if (this.tokenModel) {
+            this.tokenPositions.forEach(pos => {
+                // Clone the model for each token
+                const token = this.tokenModel!.clone();
+                
+                // Calculate world position from grid coordinates
+                const x = (pos[0] * this.cellSize) - halfMazeSize + (this.cellSize / 2);
+                const y = pos[1]; // Height above floor
+                const z = (pos[2] * this.cellSize) - halfMazeSize + (this.cellSize / 2);
+                
+                // Position and scale the token model appropriately
+                token.position.set(x, y, z);
+                token.scale.set(0.3, 0.3, 0.3); // Adjust scale as needed
+                token.rotation.y = Math.random() * Math.PI * 2; // Random rotation for variety
+                
+                this.tokens.push(token);
+                this.scene.add(token);
+            });
+        } else {
+            // Fallback to simple geometry if model loading failed
+            const tokenGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.1, 8);
+            const tokenMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xffff00,
+                emissive: 0x777700,
+                roughness: 0.3,
+                metalness: 0.7
             });
             
-            this.scene.add(monsterMesh);
-        });
+            this.tokenPositions.forEach(pos => {
+                const token = new THREE.Mesh(tokenGeometry, tokenMaterial);
+                // Calculate world position from grid coordinates
+                const x = (pos[0] * this.cellSize) - halfMazeSize + (this.cellSize / 2);
+                const y = pos[1]; // Height above floor
+                const z = (pos[2] * this.cellSize) - halfMazeSize + (this.cellSize / 2);
+                token.position.set(x, y, z);
+                token.rotation.x = Math.PI / 2;
+                this.tokens.push(token);
+                this.scene.add(token);
+            });
+        }
+    }
+
+    private initializeMonsters() {
+        const halfMazeSize = this.mazeSize / 2;
+        
+        // If we have the loaded Jensen model, use it, otherwise fallback to simple geometry
+        if (this.jensenModel) {
+            this.monsterPositions.forEach(pos => {
+                // Clone the model for each monster
+                const monster = this.jensenModel!.clone();
+                
+                // Calculate world position from grid coordinates
+                const x = (pos[0] * this.cellSize) - halfMazeSize + (this.cellSize / 2);
+                const y = pos[1]; // Height (eye level)
+                const z = (pos[2] * this.cellSize) - halfMazeSize + (this.cellSize / 2);
+                
+                // Position and scale the Jensen model appropriately
+                monster.position.set(x, y, z);
+                monster.scale.set(1.5, 1.5, 1.5); // Adjust scale as needed
+                
+                // Store the monster in our array
+                this.monsters.push({
+                    mesh: monster,
+                    position: new THREE.Vector3(x, y, z),
+                    speed: 1.5, // A bit faster but still slower than player
+                    target: this.player.position.clone(),
+                    lastSoundTime: 0
+                });
+                
+                this.scene.add(monster);
+            });
+        } else {
+            // Fallback to simple geometry if model loading failed
+            const monsterGeometry = new THREE.SphereGeometry(0.5, 8, 8);
+            const monsterMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xff0000,
+                emissive: 0x330000,
+                roughness: 0.7,
+                metalness: 0.3
+            });
+            
+            this.monsterPositions.forEach(pos => {
+                const monsterMesh = new THREE.Mesh(monsterGeometry, monsterMaterial);
+                // Calculate world position from grid coordinates
+                const x = (pos[0] * this.cellSize) - halfMazeSize + (this.cellSize / 2);
+                const y = pos[1]; // Height (eye level)
+                const z = (pos[2] * this.cellSize) - halfMazeSize + (this.cellSize / 2);
+                monsterMesh.position.set(x, y, z);
+                
+                this.monsters.push({
+                    mesh: monsterMesh,
+                    position: new THREE.Vector3(x, y, z),
+                    speed: 1.5, // A bit faster but still slower than player
+                    target: this.player.position.clone(),
+                    lastSoundTime: 0
+                });
+                
+                this.scene.add(monsterMesh);
+            });
+        }
     }
 
     private onWindowResize() {
@@ -325,6 +538,11 @@ export class Game {
     }
 
     private updateMonsters(deltaTime: number) {
+        // Don't update if models aren't loaded yet
+        if (!this.modelsLoaded) return;
+        
+        const currentTime = performance.now();
+        
         // Update each monster's position to move toward the player
         for (const monster of this.monsters) {
             // Update target to current player position
@@ -334,6 +552,21 @@ export class Game {
             const direction = new THREE.Vector3()
                 .subVectors(monster.target, monster.position)
                 .normalize();
+                
+            // Make the model look toward the player
+            if (this.jensenModel) {
+                const targetAngle = Math.atan2(direction.x, direction.z);
+                monster.mesh.rotation.y = targetAngle;
+            }
+            
+            // Calculate distance to player
+            const distanceToPlayer = monster.position.distanceTo(this.player.position);
+            
+            // Play Jensen close sound when monster is within range (not too frequently)
+            if (distanceToPlayer < 5 && currentTime - monster.lastSoundTime > 3000) {
+                this.playSound('jensenClose', 0.4);
+                monster.lastSoundTime = currentTime;
+            }
             
             // Calculate movement this frame
             const movement = direction.multiplyScalar(monster.speed * deltaTime);
@@ -371,7 +604,6 @@ export class Game {
             monster.mesh.position.copy(monster.position);
             
             // Check for collision with player
-            const distanceToPlayer = monster.position.distanceTo(this.player.position);
             if (distanceToPlayer < (this.playerRadius + this.monsterRadius)) {
                 // Monster caught player - reset player position to start
                 this.handleMonsterCatch();
@@ -380,6 +612,9 @@ export class Game {
     }
 
     private handleMonsterCatch() {
+        // Play catch sound
+        this.playSound('jensenCatch', 0.7);
+        
         // Reset player position to starting point when caught
         const halfMazeSize = this.mazeSize / 2;
         const startCol = 1;
@@ -431,21 +666,47 @@ export class Game {
     }
 
     private checkTokenCollection() {
+        // Don't check if models aren't loaded yet
+        if (!this.modelsLoaded) return;
+        
         for (let i = this.tokens.length - 1; i >= 0; i--) {
             const token = this.tokens[i];
-            const distance = this.player.position.distanceTo(token.position);
+            const tokenPosition = new THREE.Vector3();
+            token.getWorldPosition(tokenPosition);
+            const distance = this.player.position.distanceTo(tokenPosition);
             
-            if (distance < 0.8) {
+            if (distance < 1.2) { // Slightly larger collection radius for 3D models
+                // Remove the token from the scene
                 this.scene.remove(token);
                 this.tokens.splice(i, 1);
+                
+                // Play token collection sound (alternating between the two sounds)
+                const soundName = this.lastTokenSound === 1 ? 'tokenAdded1' : 'tokenAdded2';
+                this.playSound(soundName, 0.5);
+                this.lastTokenSound = this.lastTokenSound === 1 ? 2 : 1;
+                
+                // Update score
                 this.score += 10;
                 this.onScoreUpdate(this.score);
                 
                 // Display message when all tokens are collected
                 if (this.tokens.length === 0) {
-                    alert("Congratulations! You've collected all the tokens!");
+                    // Play a victory sound
+                    this.playSound('tokenAdded1', 1.0);
+                    setTimeout(() => this.playSound('tokenAdded2', 1.0), 300);
+                    
+                    alert("Congratulations! You've collected all the tokens and escaped the Jensen clones!");
                 }
             }
+        }
+    }
+    
+    private updateTokenRotations(deltaTime: number) {
+        // Rotate the tokens for a cool effect (if using 3D models)
+        if (this.tokenModel) {
+            this.tokens.forEach(token => {
+                token.rotation.y += deltaTime * 2; // Rotate around Y axis
+            });
         }
     }
 
@@ -455,6 +716,7 @@ export class Game {
         this.updatePlayerMovement(deltaTime);
         this.updateMonsters(deltaTime);
         this.checkTokenCollection();
+        this.updateTokenRotations(deltaTime);
         
         this.renderer.render(this.scene, this.camera);
         requestAnimationFrame(this.update.bind(this));
