@@ -326,21 +326,75 @@ export class UIManager {
         messageElement.textContent = message;
         messageElement.style.fontSize = '18px';
         messageElement.style.marginBottom = '20px';
+        messageElement.style.textAlign = 'center';
+        messageElement.style.padding = '0 20px';
         overlay.appendChild(messageElement);
         
-        const continueButton = document.createElement('button');
-        continueButton.textContent = 'Continue';
-        continueButton.style.padding = '10px 20px';
-        continueButton.style.fontSize = '16px';
-        continueButton.style.backgroundColor = '#4CAF50';
-        continueButton.style.border = 'none';
-        continueButton.style.borderRadius = '5px';
-        continueButton.style.cursor = 'pointer';
-        continueButton.onclick = () => {
+        // Create a container for the buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.gap = '10px';
+        
+        // Create the Retry button
+        const retryButton = document.createElement('button');
+        retryButton.textContent = 'Retry';
+        retryButton.style.padding = '10px 20px';
+        retryButton.style.fontSize = '16px';
+        retryButton.style.backgroundColor = '#4CAF50';
+        retryButton.style.border = 'none';
+        retryButton.style.borderRadius = '5px';
+        retryButton.style.cursor = 'pointer';
+        retryButton.style.marginRight = '10px';
+        
+        // Handle both click and touch events
+        const handleRetry = () => {
             document.body.removeChild(overlay);
             onClose();
         };
-        overlay.appendChild(continueButton);
+        
+        retryButton.addEventListener('click', handleRetry);
+        retryButton.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Prevent double firing on mobile
+            handleRetry();
+        });
+        
+        buttonContainer.appendChild(retryButton);
+        
+        // Create the Menu button
+        const menuButton = document.createElement('button');
+        menuButton.textContent = 'Menu';
+        menuButton.style.padding = '10px 20px';
+        menuButton.style.fontSize = '16px';
+        menuButton.style.backgroundColor = '#f44336';
+        menuButton.style.border = 'none';
+        menuButton.style.borderRadius = '5px';
+        menuButton.style.cursor = 'pointer';
+        
+        // Add click and touch event for menu button
+        const handleMenu = () => {
+            document.body.removeChild(overlay);
+            // Just use the same callback for now
+            onClose();
+            // In the future, we could add a separate callback for menu
+        };
+        
+        menuButton.addEventListener('click', handleMenu);
+        menuButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleMenu();
+        });
+        
+        buttonContainer.appendChild(menuButton);
+        overlay.appendChild(buttonContainer);
+        
+        // Add responsive styles for mobile
+        const isMobile = window.innerWidth <= 800;
+        if (isMobile) {
+            title.style.fontSize = '28px';
+            messageElement.style.fontSize = '16px';
+            retryButton.style.padding = '12px 24px';
+            menuButton.style.padding = '12px 24px';
+        }
         
         document.body.appendChild(overlay);
     }

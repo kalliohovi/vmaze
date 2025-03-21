@@ -1,7 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
     import { Game } from '../lib/game/Game';
-    //import ErrorDialog from '../lib/components/ErrorDialog.svelte';
     import MenuScene from '../lib/components/MenuScene.svelte';
     import PauseOverlay from '../lib/components/PauseOverlay.svelte';
 
@@ -10,13 +9,15 @@
     let score: number = 0;
     let direction: string = "N";
     let totalTokens: number = 42; // Updated token count
-    let errorDialogVisible = false;
     let showMenu = true;
     let gameDifficulty = "Normal";
     let gamePaused = false;
     let currentStage: number = 1;
     let sprintAvailable: boolean = false;
     let sprintEnergy: number = 0;
+    
+    // Add mobile detection
+    let isMobileDevice = false;
     
     // Add Survival phase state
     let survivalPhaseActive: boolean = false;
@@ -47,47 +48,8 @@
         // Reset score immediately to ensure UI is consistent
         score = 0;
         
-        // Show error dialog
-        errorDialogVisible = true;
-        
-        // Game is already paused in handleMonsterCatch()
-    }
-    
-    function handleAbort() {
-        // Go back to menu
-        showMenu = true;
-        
-        // Clean up the game when going back to menu
-        cleanupGame();
-    }
-    
-    function handleRetry() {
-        // Reset player and monster positions, score, stages, and tokens
-        game.resetGame(true);
-        
-        // Also update our local score state to match game's reset
-        score = 0;
-        
-        // Hide the error dialog
-        errorDialogVisible = false;
-    }
-    
-    function handleIgnore() {
-        // Explicitly reset the score to zero in both the game and local state
-        if (game) {
-            // Force game to reset with full reset
-            game.resetGame(true);
-            
-            // Update our local score to 0
-            score = 0;
-        }
-        
-        // Just close the dialog and resume at current position
-        // Resume the game after reset
-        game.resumeGame();
-        
-        // Hide the error dialog
-        errorDialogVisible = false;
+        // Game's handlePlayerCaught will handle showing the error dialog and game pause
+        // The Game.ts implementation will handle everything else
     }
     
     function handleStartGame(event) {
@@ -126,7 +88,6 @@
                 gameDifficulty,
                 (newStage: number) => {
                     currentStage = newStage;
-                    updateStageUI();
                 },
                 (active: boolean, timeRemaining: number) => {
                     survivalPhaseActive = active;
@@ -148,7 +109,7 @@
     
     function handleKeyDown(event: KeyboardEvent) {
         // Only process when game is running (not in menu)
-        if (!showMenu && !errorDialogVisible) {
+        if (!showMenu) {
             if (event.code === 'Space') {
                 // Toggle pause state
                 if (game) {
@@ -198,16 +159,6 @@
         animationFrameHandle = requestAnimationFrame(updateSprintInfo);
     }
     
-    // Add a function to update UI when stage changes
-    function updateStageUI() {
-        // Update the message box with stage-specific messages
-        if (currentStage === 2) {
-            const messageBox = document.querySelector('.message-box');
-            if (messageBox) {
-                messageBox.textContent = "WARNING: Security breach detected! More Jensen clones have entered the maze! Press SHIFT to sprint.";
-            }
-        }
-    }
     
     // Function to clean up the game instance
     function cleanupGame() {
@@ -225,7 +176,16 @@
     }
 
     onMount(() => {
-        // Don't automatically start the game, wait for menu selection
+        // Check if it's a mobile device
+        isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 800;
+        
+        // Add meta viewport for mobile
+        if (isMobileDevice) {
+            const meta = document.createElement('meta');
+            meta.name = 'viewport';
+            meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+            document.head.appendChild(meta);
+        }
     });
     
     onDestroy(() => {
@@ -242,101 +202,68 @@
 {:else}
     <main>
         <div class="arena-frame">
-            <div class="game-viewport">
-                <div bind:this={gameContainer} class="game-container"></div>
-            </div>
-            
             <div class="top-bar">
-                <div class="compass">
-                    <div class="compass-directions">
-                        <span class={direction === "N" ? "active" : ""}>N</span>
-                        <span class={direction === "E" ? "active" : ""}>E</span>
-                        <span class={direction === "S" ? "active" : ""}>S</span>
-                        <span class={direction === "W" ? "active" : ""}>W</span>
+                <div class="main-info">
+                    <div class="compass">
+                        <div class="compass-directions">
+                            <span class={direction === "N" ? "active" : ""}>N</span>
+                            <span class={direction === "E" ? "active" : ""}>E</span>
+                            <span class={direction === "S" ? "active" : ""}>S</span>
+                            <span class={direction === "W" ? "active" : ""}>W</span>
+                        </div>
                     </div>
-                </div>
-                <div class="score-display">SCORE: {score}</div>
-                <div class="stage-display">STAGE: {currentStage}</div>
-                {#if survivalPhaseActive}
-                <div class="survival-timer">SURVIVE: {formatTime(survivalPhaseTimeRemaining)}</div>
-                {/if}
-                <div class="difficulty-display">LEVEL: {gameDifficulty}</div>
-            </div>
-            
-            <div class="side-bar left">
-                <div class="character-portrait"> 
-                    <div class="portrait-frame"></div>
-                </div>
-                <div class="stats">
-                    <div class="stat-bar">
-                        <span>HP</span>
-                        <div class="bar health"></div>
-                    </div>
-                    <div class="stat-bar">
-                        <span>MP</span>
-                        <div class="bar mana"></div>
-                    </div>
-                    <div class="stat-bar">
-                        <span>ST</span>
-                        <div class="bar stamina"></div>
+                    
+                    <div class="portrait-container">
+                        <div class="character-portrait">
+                            <div class="portrait-frame"></div>
+                        </div>
                     </div>
                 </div>
                 
-                <!-- Add Sprint meter when available -->
-                {#if sprintAvailable}
-                <div class="sprint-container">
-                    <div class="sprint-label">SPRINT</div>
+                <div class="stats-display">
+                    <div class="score-display">S: {score}</div>
+                    <div class="stage-display">ST: {currentStage}</div>
+                    <div class="tokens-display">T: {score/10}/{totalTokens}</div>
+                </div>
+                
+                <div class="right-info">
+                    <div class="difficulty-display">LEVEL: {gameDifficulty}</div>
+                    <div class="clones-display danger">CLONES: {survivalPhaseActive ? 6 : 3}</div>
+                </div>
+            </div>
+            
+            {#if survivalPhaseActive}
+            <div class="survival-timer">SURVIVE: {formatTime(survivalPhaseTimeRemaining)}</div>
+            {/if}
+            
+            <div class="game-viewport">
+                <div bind:this={gameContainer} class="game-container"></div>
+                
+                <!-- Sprint meter for mobile -->
+                {#if sprintAvailable && isMobileDevice}
+                <div class="mobile-sprint-container">
                     <div class="sprint-bar">
                         <div class="sprint-fill" style="width: {sprintEnergy}%"></div>
                     </div>
-                    <div class="sprint-key">SHIFT</div>
                 </div>
                 {/if}
             </div>
             
-            <div class="side-bar right">
-                <div class="weapon-display">
-                    <div class="weapon-icon"></div>
+            <!-- Sprint container for desktop, positioned on side -->
+            {#if sprintAvailable && !isMobileDevice}
+            <div class="side-sprint-container">
+                <div class="sprint-label">SPRINT</div>
+                <div class="sprint-bar">
+                    <div class="sprint-fill" style="width: {sprintEnergy}%"></div>
                 </div>
-                <div class="items">
-                    <div class="item">TOKENS: {score/10}/{totalTokens}</div>
-                    <div class="item danger">JENSEN CLONES: {survivalPhaseActive ? 6 : 3}</div>
-                </div>
+                <div class="sprint-key">SHIFT</div>
             </div>
-            
-            <div class="bottom-bar">
-                <div class="message-box">
-                    {#if gameDifficulty === "Impossible"}
-                        FATAL ERROR: You selected IMPOSSIBLE mode. The Jensen clones have been enhanced with wall-phasing technology. THERE IS NO ESCAPE. YOU WILL BE TERMINATED.
-                    {:else if survivalPhaseActive}
-                        CRITICAL ALERT: More Jensen clones detected! Survive for {formatTime(survivalPhaseTimeRemaining)} to stabilize the maze! Press SHIFT to sprint.
-                    {:else}
-                        DANGER: Jensen clones are hunting you! Use the wide corridors to evade them and collect all tokens to escape!
-                    {/if}
-                </div>
-                <div class="controls-hint">
-                    <span>W/UP - Forward</span>
-                    <span>S/DOWN - Back</span>
-                    <span>A/LEFT - Turn Left</span>
-                    <span>D/RIGHT - Turn Right</span>
-                    <span>SPACE - Pause</span>
-                    {#if sprintAvailable}
-                    <span>SHIFT - Sprint</span>
-                    {/if}
-                </div>
-            </div>
+            {/if}
         </div>
     </main>
     
     <PauseOverlay visible={gamePaused} />
 {/if}
-
-<!--<ErrorDialog 
-    bind:visible={errorDialogVisible}
-    on:abort={handleAbort}
-    on:retry={handleRetry}
-    on:ignore={handleIgnore}
-/>-->
 
 <style>
     main {
@@ -353,49 +280,45 @@
         width: 100%;
         height: 100%;
         position: relative;
-        display: grid;
-        grid-template-rows: 60px 1fr 80px;
-        grid-template-columns: 120px 1fr 120px;
-        grid-template-areas:
-            "topleft top topright"
-            "left center right"
-            "bottomleft bottom bottomright";
+        display: flex;
+        flex-direction: column;
         background-color: #423d38;
         box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.8);
-        border: 12px solid #2a2520;
+        border: 8px solid #2a2520;
         box-sizing: border-box;
     }
 
-    .game-viewport {
-        grid-area: center;
-        position: relative;
-        overflow: hidden;
-        border: 4px solid #2a2520;
-        box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.7);
-    }
-
-    .game-container {
-        width: 100%;
-        height: 100%;
-    }
-
     .top-bar {
-        grid-area: top;
+        height: 50px;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 0 20px;
+        padding: 0 10px;
         background-color: #2a2520;
         border-bottom: 2px solid #000;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
     }
 
+    .main-info, .right-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .stats-display {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
     .compass {
-        width: 120px;
-        height: 40px;
+        width: 60px;
+        height: 30px;
         background-color: #111;
-        border: 3px solid #534939;
-        border-radius: 5px;
+        border: 2px solid #534939;
+        border-radius: 4px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -408,6 +331,7 @@
         color: #777;
         font-weight: bold;
         font-family: 'Courier New', monospace;
+        font-size: 14px;
     }
 
     .compass-directions .active {
@@ -415,62 +339,17 @@
         text-shadow: 0 0 8px #ffa500;
     }
 
-    .score-display {
-        font-family: 'Courier New', monospace;
-        font-size: 24px;
-        font-weight: bold;
-        color: #ffd700;
-        text-shadow: 0 0 5px #ffa500;
-    }
-
-    .stage-display {
-        font-family: 'Courier New', monospace;
-        font-size: 18px;
-        font-weight: bold;
-        color: #ffd700;
-        text-shadow: 0 0 5px #ffa500;
-        background-color: #111;
-        padding: 5px 10px;
-        border-radius: 3px;
-        border: 2px solid #534939;
-        margin-right: 10px;
-    }
-
-    .difficulty-display {
-        font-family: 'Courier New', monospace;
-        font-size: 18px;
-        font-weight: bold;
-        color: #ffd700;
-        text-shadow: 0 0 5px #ffa500;
-        background-color: #111;
-        padding: 5px 10px;
-        border-radius: 3px;
-        border: 2px solid #534939;
-    }
-
-    .side-bar {
+    .portrait-container {
         display: flex;
-        flex-direction: column;
         align-items: center;
-        padding: 10px;
-        background-color: #2a2520;
-        box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5);
-    }
-
-    .side-bar.left {
-        grid-area: left;
-        border-right: 2px solid #000;
-    }
-
-    .side-bar.right {
-        grid-area: right;
-        border-left: 2px solid #000;
     }
 
     .character-portrait {
-        width: 90px;
-        height: 100px;
-        margin-bottom: 20px;
+        width: 36px;
+        height: 36px;
+        border: 2px solid #534939;
+        border-radius: 4px;
+        overflow: hidden;
     }
 
     .portrait-frame {
@@ -480,130 +359,56 @@
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
-        border: 3px solid #534939;
-        border-radius: 5px;
-        transition: all 0.3s ease;
     }
 
-    .stats {
-        width: 100%;
-    }
-
-    .stat-bar {
-        margin: 10px 0;
-        display: flex;
-        align-items: center;
-    }
-
-    .stat-bar span {
-        width: 25px;
-        color: #ccc;
+    .score-display {
+        font-family: 'Courier New', monospace;
+        font-size: 10px;
         font-weight: bold;
-        font-family: 'Courier New', monospace;
-    }
-
-    .bar {
-        height: 15px;
-        flex-grow: 1;
-        border: 2px solid #534939;
-        border-radius: 3px;
-        position: relative;
-    }
-
-    .bar::after {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        height: 100%;
-        border-radius: 1px;
-    }
-
-    .health::after {
-        width: 85%;
-        background-color: #a02c2c;
-    }
-
-    .mana::after {
-        width: 65%;
-        background-color: #2c57a0;
-    }
-
-    .stamina::after {
-        width: 75%;
-        background-color: #2ca042;
-    }
-
-    .weapon-display {
-        width: 90px;
-        height: 120px;
-        background-color: #111;
-        border: 3px solid #534939;
-        border-radius: 5px;
-        margin-bottom: 20px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .weapon-icon {
-        width: 70px;
-        height: 70px;
-        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="70" height="70" viewBox="0 0 70 70"><path d="M35,10 L40,25 L45,25 L45,60 L25,60 L25,25 L30,25 Z" fill="%23ccc"/><path d="M35,20 L37,25 L33,25 Z" fill="%23f5f5f5"/></svg>');
-    }
-
-    .items {
-        width: 100%;
-    }
-
-    .item {
-        font-family: 'Courier New', monospace;
         color: #ffd700;
-        text-align: center;
-        font-size: 14px;
-        background-color: #111;
-        border: 2px solid #534939;
-        border-radius: 3px;
-        padding: 5px;
-        margin: 5px 0;
+        text-shadow: 0 0 5px #ffa500;
     }
 
-    .item.danger {
+    .stage-display, .tokens-display {
+        font-family: 'Courier New', monospace;
+        font-size: 10px;
+        font-weight: bold;
+        color: #ffd700;
+        text-shadow: 0 0 5px #ffa500;
+    }
+
+    .difficulty-display, .clones-display {
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        font-weight: bold;
+        background-color: #111;
+        padding: 3px 6px;
+        border-radius: 3px;
+        border: 2px solid #534939;
+    }
+    
+    .difficulty-display {
+        color: #ffd700;
+        text-shadow: 0 0 5px #ffa500;
+    }
+    
+    .danger {
         color: #ff4040;
         border-color: #800000;
         text-shadow: 0 0 5px #ff0000;
     }
 
-
-
-    .bottom-bar {
-        grid-area: bottom;
-        display: flex;
-        flex-direction: column;
-        background-color: #2a2520;
-        border-top: 2px solid #000;
-        box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.4);
-    }
-
-    .message-box {
-        flex-grow: 1;
-        padding: 10px;
-        font-family: 'Courier New', monospace;
-        color: #ccc;
-        border-bottom: 1px solid #534939;
-        background-color: #111;
+    .game-viewport {
+        flex: 1;
+        position: relative;
         overflow: hidden;
-        margin: 5px;
-        border-radius: 3px;
+        border: 4px solid #2a2520;
+        box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.7);
     }
 
-    .controls-hint {
-        display: flex;
-        justify-content: space-around;
-        padding: 5px;
-        font-family: 'Courier New', monospace;
-        color: #aaa;
-        font-size: 12px;
+    .game-container {
+        width: 100%;
+        height: 100%;
     }
 
     /* Make the difficulty display red for Impossible mode */
@@ -620,25 +425,39 @@
         100% { opacity: 1; }
     }
 
-    .sprint-container {
-        width: 100%;
-        margin-top: 15px;
+    .side-sprint-container {
+        position: absolute;
+        left: 10px;
+        top: 60px;
+        width: 60px;
         padding: 5px;
         background-color: #111;
         border: 2px solid #534939;
         border-radius: 3px;
     }
     
+    .mobile-sprint-container {
+        position: absolute;
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 120px;
+        height: 10px;
+        background-color: rgba(0, 0, 0, 0.5);
+        border-radius: 5px;
+        overflow: hidden;
+    }
+    
     .sprint-label {
         font-family: 'Courier New', monospace;
         color: #ccc;
-        font-size: 12px;
+        font-size: 10px;
         text-align: center;
         margin-bottom: 3px;
     }
     
     .sprint-bar {
-        height: 10px;
+        height: 8px;
         width: 100%;
         background-color: #333;
         border: 1px solid #666;
@@ -655,37 +474,41 @@
     .sprint-key {
         font-family: 'Courier New', monospace;
         color: #ccc;
-        font-size: 10px;
+        font-size: 9px;
         text-align: center;
         margin-top: 3px;
     }
 
     .survival-timer {
         position: absolute;
-        top: 12px;
+        top: 60px;
         left: 50%;
         transform: translateX(-50%);
-        padding: 5px 10px;
+        padding: 3px 8px;
         background-color: rgba(255, 0, 0, 0.7);
         color: white;
         font-family: "VT323", monospace;
-        font-size: 1.5rem;
+        font-size: 1.2rem;
         border-radius: 5px;
         box-shadow: 0 0 10px rgba(255, 0, 0, 0.7);
         text-shadow: 0 0 5px #fff;
         animation: blink 1s infinite;
-    }
-    
-    
-    @keyframes pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.7; }
-        100% { opacity: 1; }
+        z-index: 10;
     }
     
     @keyframes blink {
         0% { opacity: 1; }
         50% { opacity: 0.6; }
         100% { opacity: 1; }
+    }
+
+    /* Hide scrollbars and prevent overscroll on mobile */
+    main {
+        overscroll-behavior: none;
+        overflow: hidden;
+        position: fixed;
+        touch-action: none;
+        width: 100%;
+        height: 100%;
     }
 </style> 

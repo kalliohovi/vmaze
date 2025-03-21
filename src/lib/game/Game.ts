@@ -9,6 +9,7 @@ import { AudioManager } from './audio/AudioManager';
 import { PhaseManager } from './phases/PhaseManager';
 import { UIManager } from '../ui/UIManager';
 import { TextureManager } from './textures/TextureManager';
+import { MobileControls } from '../ui/MobileControls';
 
 // Add this interface near the top of your file, before the Game class
 interface ExtendedAudioBufferSourceNode extends AudioBufferSourceNode {
@@ -81,6 +82,9 @@ export class Game {
     
     // Add timeout property
     private impossibleModeTimeout: number | null = null;
+    
+    // Add mobile controls property
+    private mobileControls: MobileControls | null = null;
     
     constructor(
         container: HTMLElement, 
@@ -217,6 +221,9 @@ export class Game {
         
         // Initial UI update
         this.updateUI();
+        
+        // Initialize mobile controls
+        this.initializeMobileControls(container);
     }
     
     private setupLighting(): void {
@@ -667,6 +674,11 @@ export class Game {
             this.uiManager.cleanup();
         }
         
+        // Clean up mobile controls
+        if (this.mobileControls) {
+            this.mobileControls.dispose();
+        }
+        
         // Clear impossible mode timeout
         if (this.impossibleModeTimeout) {
             clearTimeout(this.impossibleModeTimeout);
@@ -749,5 +761,74 @@ export class Game {
             const b = 0.7 + 0.3 * Math.cos(performance.now() * 0.001);
             this.portal.material.emissive.setRGB(r, g, b);
         }
+    }
+    
+    private initializeMobileControls(container: HTMLElement): void {
+        // Initialize mobile controls with callbacks for movement and rotation
+        this.mobileControls = new MobileControls(
+            container,
+            // Forward/backward movement (y value is what we care about)
+            (x: number, y: number) => {
+                // We need to negate y because mobile joystick up means negative y
+                if (this.player) {
+                    this.player.setMobileControlsInput(-y, 0);
+                }
+            },
+            // Left/right rotation (x value is what we care about)
+            (x: number, y: number) => {
+                if (this.player) {
+                    this.player.setMobileControlsInput(0, x);
+                }
+            }
+        );
+        
+        // Add mobile-friendly meta tag to prevent zoom and scroll issues
+        this.addMobileMetaTags();
+    }
+    
+    private addMobileMetaTags(): void {
+        // Prevent pinch zoom and scrolling on mobile
+        const metaViewport = document.querySelector('meta[name="viewport"]');
+        
+        if (metaViewport) {
+            // Update existing viewport meta tag
+            metaViewport.setAttribute('content', 
+                'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
+        } else {
+            // Create new viewport meta tag
+            const meta = document.createElement('meta');
+            meta.name = 'viewport';
+            meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+            document.head.appendChild(meta);
+        }
+        
+        // Add additional meta to disable touchscreen text selection
+        const metaUserSelect = document.createElement('meta');
+        metaUserSelect.name = 'apple-mobile-web-app-capable';
+        metaUserSelect.content = 'yes';
+        document.head.appendChild(metaUserSelect);
+        
+        // Add CSS to prevent text selection and touch callouts
+        const style = document.createElement('style');
+        style.textContent = `
+            * {
+                -webkit-touch-callout: none;
+                -webkit-user-select: none;
+                -khtml-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+                user-select: none;
+                touch-action: manipulation;
+            }
+            
+            body {
+                overscroll-behavior: none;
+                overflow: hidden;
+                position: fixed;
+                width: 100%;
+                height: 100%;
+            }
+        `;
+        document.head.appendChild(style);
     }
 } 

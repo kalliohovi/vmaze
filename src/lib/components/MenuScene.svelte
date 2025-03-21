@@ -1,68 +1,79 @@
 <script lang="ts">
     import { createEventDispatcher } from 'svelte';
     
-    export let visible = true;
+    export let visible = false;
     
     const dispatch = createEventDispatcher();
-    const difficulties = ["Easy", "Normal", "Hard", "Impossible"];
     let selectedDifficulty = "Normal";
+    
+    // Detect if this is a mobile device
+    let isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 800;
     
     function startGame() {
         dispatch('startGame', { difficulty: selectedDifficulty });
-    }
-    
-    function changeDifficulty(difficulty: string) {
-        selectedDifficulty = difficulty;
     }
 </script>
 
 {#if visible}
 <div class="menu-overlay">
-    <div class="win95-menu">
-        <div class="title-bar">
-            <div class="title-text">VMaze.exe</div>
+    <div class="menu-container">
+        <div class="menu-logo">
+            <h1>VMaze</h1>
+            <div class="menu-subtitle">Jensen Survival Simulator</div>
         </div>
         
         <div class="menu-content">
-            <div class="game-title">
-                <h1>VMaze</h1>
-                <p>Escape the Jensen Clones!</p>
-            </div>
+            <p class="menu-description">
+                Collect all the tokens and escape the maze while avoiding the Jensen clones!
+            </p>
             
-            <div class="difficulty-selection">
-                <h2>Select Difficulty:</h2>
-                <div class="difficulty-buttons">
-                    {#each difficulties as difficulty}
-                        <button 
-                            class="win95-button {selectedDifficulty === difficulty ? 'selected' : ''}" 
-                            on:click={() => changeDifficulty(difficulty)}
-                        >
-                            {difficulty}
-                            {#if difficulty === "Impossible"}
-                                <span class="warning">⚠️</span>
-                            {/if}
-                        </button>
-                    {/each}
-                </div>
-                
-                {#if selectedDifficulty === "Impossible"}
-                    <div class="warning-text">WARNING: This mode is ACTUALLY impossible!</div>
+            <div class="controls-info">
+                {#if isMobileDevice}
+                    <h3>Mobile Controls</h3>
+                    <ul>
+                        <li>Left joystick - Move forward/backward</li>
+                        <li>Right joystick - Turn left/right</li>
+                    </ul>
+                {:else}
+                    <h3>Keyboard Controls</h3>
+                    <ul>
+                        <li>W/Arrow Up - Move forward</li>
+                        <li>S/Arrow Down - Move backward</li>
+                        <li>A/Arrow Left - Turn left</li>
+                        <li>D/Arrow Right - Turn right</li>
+                        <li>Space - Pause game</li>
+                        <li>Escape - Pause menu</li>
+                    </ul>
                 {/if}
             </div>
             
-            <div class="start-button-container">
-                <button class="win95-button start-button" on:click={startGame}>
-                    Start Game
-                </button>
+            <div class="difficulty-selector">
+                <h3>Select Difficulty</h3>
+                <div class="difficulty-options">
+                    <button 
+                        class={selectedDifficulty === "Easy" ? "selected" : ""}
+                        on:click={() => selectedDifficulty = "Easy"}>
+                        Easy
+                    </button>
+                    <button 
+                        class={selectedDifficulty === "Normal" ? "selected" : ""}
+                        on:click={() => selectedDifficulty = "Normal"}>
+                        Normal
+                    </button>
+                    <button 
+                        class={selectedDifficulty === "Hard" ? "selected" : ""}
+                        on:click={() => selectedDifficulty = "Hard"}>
+                        Hard
+                    </button>
+                    <button 
+                        class={selectedDifficulty === "Impossible" ? "selected impossible" : "impossible"}
+                        on:click={() => selectedDifficulty = "Impossible"}>
+                        Impossible
+                    </button>
+                </div>
             </div>
             
-            <div class="game-info">
-                <h3>Controls:</h3>
-                <p>W/UP - Move Forward</p>
-                <p>S/DOWN - Move Backward</p>
-                <p>A/LEFT - Turn Left</p>
-                <p>D/RIGHT - Turn Right</p>
-            </div>
+            <button class="start-button" on:click={startGame}>START GAME</button>
         </div>
     </div>
 </div>
@@ -73,133 +84,189 @@
         position: fixed;
         top: 0;
         left: 0;
-        right: 0;
-        bottom: 0;
-        background: #008080; /* Classic Windows 95 teal background */
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
         display: flex;
         align-items: center;
         justify-content: center;
         z-index: 1000;
     }
     
-    .win95-menu {
-        width: 500px;
-        background: #c0c0c0;
-        border: 3px solid #dfdfdf;
-        border-right-color: #808080;
-        border-bottom-color: #808080;
-        box-shadow: 0 0 0 1px #000000;
-        font-family: 'MS Sans Serif', Tahoma, sans-serif;
+    .menu-container {
+        width: 80%;
+        max-width: 700px;
+        background-color: #222;
+        border: 6px solid #444;
+        border-radius: 10px;
+        padding: 30px;
+        color: #ddd;
+        font-family: 'Courier New', monospace;
+        box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
     }
     
-    .title-bar {
-        background: #000080;
-        color: white;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 3px 5px;
-        font-weight: bold;
-    }
-    
-    .menu-content {
-        padding: 20px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
-    
-    .game-title {
+    .menu-logo {
         text-align: center;
         margin-bottom: 20px;
     }
     
-    .game-title h1 {
+    .menu-logo h1 {
+        font-size: 48px;
         margin: 0;
-        font-size: 32px;
-        color: #000080;
+        color: #ffd700;
+        text-shadow: 0 0 10px #ffa500, 0 0 20px #ff0000;
+        letter-spacing: 2px;
     }
     
-    .game-title p {
-        margin: 5px 0 0;
-        font-size: 16px;
+    .menu-subtitle {
+        font-size: 18px;
+        color: #aaa;
+        margin-top: 5px;
     }
     
-    .difficulty-selection {
-        width: 100%;
-        margin-bottom: 20px;
+    .menu-description {
         text-align: center;
-    }
-    
-    .difficulty-selection h2 {
-        margin: 0 0 10px;
+        margin-bottom: 20px;
+        line-height: 1.5;
         font-size: 18px;
     }
     
-    .difficulty-buttons {
-        display: flex;
-        justify-content: center;
-        gap: 10px;
+    .controls-info {
+        margin-bottom: 30px;
+        background-color: #1a1a1a;
+        padding: 15px;
+        border-radius: 5px;
+        border: 1px solid #333;
+    }
+    
+    .controls-info h3 {
+        margin-top: 0;
+        color: #ffd700;
         margin-bottom: 10px;
     }
     
-    .win95-button {
-        min-width: 80px;
-        padding: 6px 12px;
-        background: #c0c0c0;
-        border: 2px solid #dfdfdf;
-        border-right-color: #808080;
-        border-bottom-color: #808080;
-        box-shadow: 0 0 0 1px #000000;
-        font-family: 'MS Sans Serif', Tahoma, sans-serif;
-        font-size: 14px;
-        cursor: pointer;
-        position: relative;
+    .controls-info ul {
+        list-style-type: none;
+        padding: 0;
+        margin: 0;
     }
     
-    .win95-button:active, .win95-button.selected {
-        border-color: #808080;
-        border-right-color: #dfdfdf;
-        border-bottom-color: #dfdfdf;
-        background-color: #b0b0b0;
-    }
-    
-    .warning {
-        color: red;
-        margin-left: 5px;
-    }
-    
-    .warning-text {
-        color: red;
-        font-weight: bold;
-        margin-top: 10px;
-        font-size: 14px;
-    }
-    
-    .start-button-container {
-        margin-bottom: 20px;
-    }
-    
-    .start-button {
-        font-size: 18px;
-        font-weight: bold;
-        padding: 8px 20px;
-    }
-    
-    .game-info {
-        background: #ffffff;
-        border: 1px solid #808080;
-        padding: 10px;
-        width: 80%;
-        font-size: 12px;
-    }
-    
-    .game-info h3 {
-        margin: 0 0 5px;
+    .controls-info li {
+        margin-bottom: 5px;
         font-size: 16px;
     }
     
-    .game-info p {
-        margin: 3px 0;
+    .difficulty-selector {
+        margin-bottom: 30px;
+        text-align: center;
+    }
+    
+    .difficulty-selector h3 {
+        color: #ffd700;
+        margin-bottom: 15px;
+    }
+    
+    .difficulty-options {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    
+    .difficulty-options button {
+        padding: 10px 20px;
+        background-color: #333;
+        border: 1px solid #555;
+        color: #ddd;
+        font-family: 'Courier New', monospace;
+        cursor: pointer;
+        border-radius: 5px;
+        transition: all 0.2s;
+        font-size: 16px;
+    }
+    
+    .difficulty-options button:hover {
+        background-color: #444;
+    }
+    
+    .difficulty-options button.selected {
+        background-color: #ffd700;
+        color: #000;
+        border-color: #ffa500;
+        box-shadow: 0 0 10px #ffa500;
+    }
+    
+    .impossible {
+        color: #ff0000 !important;
+        border-color: #800000 !important;
+    }
+    
+    .impossible.selected {
+        background-color: #ff0000 !important;
+        color: #fff !important;
+        border-color: #800000 !important;
+        box-shadow: 0 0 10px #ff0000 !important;
+    }
+    
+    .start-button {
+        display: block;
+        width: 200px;
+        margin: 0 auto;
+        padding: 15px 20px;
+        background-color: #ffd700;
+        color: #000;
+        font-family: 'Courier New', monospace;
+        font-size: 18px;
+        font-weight: bold;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: all 0.3s;
+        box-shadow: 0 0 10px #ffa500;
+    }
+    
+    .start-button:hover {
+        background-color: #ffa500;
+        transform: scale(1.05);
+        box-shadow: 0 0 15px #ff8c00;
+    }
+    
+    /* Mobile responsiveness */
+    @media (max-width: 800px) {
+        .menu-container {
+            width: 90%;
+            padding: 20px;
+        }
+        
+        .menu-logo h1 {
+            font-size: 36px;
+        }
+        
+        .menu-subtitle {
+            font-size: 16px;
+        }
+        
+        .menu-description {
+            font-size: 16px;
+        }
+        
+        .controls-info {
+            padding: 10px;
+        }
+        
+        .controls-info li {
+            font-size: 14px;
+        }
+        
+        .difficulty-options button {
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+        
+        .start-button {
+            width: 180px;
+            padding: 12px 16px;
+            font-size: 16px;
+        }
     }
 </style> 

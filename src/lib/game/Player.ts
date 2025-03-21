@@ -23,6 +23,11 @@ export class Player {
     public sprintDepletionRate: number = 20; // per second
     public isSprinting: boolean = false;
     
+    // Mobile control properties
+    private mobileForward: number = 0;
+    private mobileRotation: number = 0;
+    private isUsingMobileControls: boolean = false;
+    
     private keys: Set<string> = new Set();
     private onRotationUpdate: (rotation: number) => void;
     
@@ -53,17 +58,31 @@ export class Player {
         this.keys.delete(event.key.toLowerCase());
     }
     
+    // Method for receiving input from mobile controls
+    public setMobileControlsInput(forward: number, rotation: number): void {
+        this.mobileForward = forward;
+        this.mobileRotation = rotation;
+        this.isUsingMobileControls = true;
+    }
+    
     public update(deltaTime: number, checkWallCollision: (position: THREE.Vector3, radius: number) => boolean): void {
         // Reset velocity
         this.velocity.set(0, 0, 0);
         
-        // Handle rotation with A/D or left/right keys
+        // Handle keyboard rotation
         if (this.keys.has('a') || this.keys.has('arrowleft')) {
             this.rotation += this.rotationSpeed * deltaTime;
             this.onRotationUpdate(this.rotation);
         }
         if (this.keys.has('d') || this.keys.has('arrowright')) {
             this.rotation -= this.rotationSpeed * deltaTime;
+            this.onRotationUpdate(this.rotation);
+        }
+        
+        // Handle mobile rotation if mobile controls are being used
+        if (this.isUsingMobileControls && Math.abs(this.mobileRotation) > 0.1) {
+            // Apply rotation based on joystick input
+            this.rotation -= this.mobileRotation * this.rotationSpeed * deltaTime;
             this.onRotationUpdate(this.rotation);
         }
         
@@ -88,12 +107,19 @@ export class Player {
         // Calculate actual speed based on sprint status
         const currentSpeed = this.isSprinting ? this.speed * 2.0 : this.speed;
         
-        // Handle forward/backward movement with W/S or up/down keys
+        // Handle keyboard forward/backward movement
         if (this.keys.has('w') || this.keys.has('arrowup')) {
             this.velocity.z = -currentSpeed;
         }
         if (this.keys.has('s') || this.keys.has('arrowdown')) {
             this.velocity.z = currentSpeed;
+        }
+        
+        // Handle mobile forward/backward movement
+        if (this.isUsingMobileControls) {
+            // Use the negative Y axis from the joystick for forward/backward
+            // Forward is negative Z in our coordinate system
+            this.velocity.z = -this.mobileForward * currentSpeed;
         }
         
         // Apply rotation to movement direction (for first-person effect)
