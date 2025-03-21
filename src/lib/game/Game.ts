@@ -52,6 +52,12 @@ export class Game {
     private audioManager: AudioManager;
     private phaseManager: PhaseManager;
     
+    // Portal properties
+    private portal: THREE.Mesh | null = null;
+    private portalPosition: THREE.Vector3 | null = null;
+    private allTokensCollected: boolean = false;
+    private portalRadius: number = 2.0;
+    
     // Game state
     private isPaused: boolean = false;
     private difficulty: string = "Normal";
@@ -180,7 +186,7 @@ export class Game {
                 this.phaseManager.addPoints(points);
                 this.updateUI();
             },
-            this.handleGameCompletion.bind(this)
+            this.handleAllTokensCollected.bind(this)
         );
         
         // Initialize monster manager
@@ -241,6 +247,9 @@ export class Game {
         // Play catch sound once
         this.audioManager.playSound('jensenCatch', 0.7);
         
+        // First, explicitly reset score to zero
+        this.phaseManager.resetScore();
+        
         // Use the UI manager to show the error dialog
         this.uiManager.showErrorDialog(
             "You've been caught by a Jensen clone! Try again...",
@@ -251,8 +260,8 @@ export class Game {
                 // Make sure the UI is fully updated after reset
                 this.updateUI();
                 
-                // Explicitly notify the score callback after reset
-                this.onScoreUpdate(this.phaseManager.getScore());
+                // Explicitly notify the score callback after reset to update Svelte component
+                this.onScoreUpdate(0);
             }
         );
     }
@@ -262,7 +271,7 @@ export class Game {
             case "Easy":
                 // Slower monsters, faster player
                 this.monsterManager.setMonsterSpeed(1.0);
-                this.player.speed = 4.0;
+                this.player.speed = 6.0;
                 break;
                 
             case "Normal":
@@ -289,7 +298,7 @@ export class Game {
         this.monsterManager.setImpossibleMode(true);
         
         // Regular player speed
-        this.player.speed = 3.0;
+        this.player.speed = 1.1;
         
         // Clear any existing timeout
         if (this.impossibleModeTimeout) {
@@ -310,6 +319,90 @@ export class Game {
         }, 3000 + Math.random() * 5000); // Random between 3-8 seconds
     }
     
+    private handleAllTokensCollected(): void {
+        // Set the flag that all tokens have been collected
+        this.allTokensCollected = true;
+        
+        // Create the exit portal at a predetermined location
+        this.createExitPortal();
+        
+        // Show message to guide the player
+        this.uiManager.showTemporaryMessage("All tokens collected! Find the portal to escape!");
+        
+        // Play sound to indicate portal appearance
+        this.audioManager.playSound('tokenAdded1', 1.0);
+        setTimeout(() => this.audioManager.playSound('tokenAdded2', 1.0), 300);
+        
+        console.log("All tokens collected! Portal has appeared");
+        
+        // IMPORTANT: Do NOT trigger game completion here
+        // The player must physically reach the portal to win
+    }
+    
+    private createExitPortal(): void {
+        // Create a glowing portal mesh
+        const portalGeometry = new THREE.CylinderGeometry(1.2, 1.2, 0.3, 32);
+        const portalMaterial = new THREE.MeshStandardMaterial({
+            color: 0x00ffff,
+            emissive: 0x00ffff,
+            emissiveIntensity: 3.0,
+            side: THREE.DoubleSide
+        });
+        
+        this.portal = new THREE.Mesh(portalGeometry, portalMaterial);
+        
+        // Find a suitable position for the portal
+        const portalPosition = this.findPortalPosition();
+        this.portalPosition = portalPosition;
+        
+        // Position the portal
+        this.portal.position.copy(portalPosition);
+        
+        // Rotate portal to be horizontal (like a platform to step on)
+        this.portal.rotation.x = Math.PI / 2;
+        
+        // Add to scene
+        this.scene.add(this.portal);
+        
+        // Create a bright light at the portal for visibility
+        const portalLight = new THREE.PointLight(0x00ffff, 4, 10);
+        portalLight.position.copy(portalPosition);
+        this.scene.add(portalLight);
+        
+        // Play a distinct sound to indicate portal has appeared
+        this.audioManager.playSound('tokenAdded1', 1.0);
+        setTimeout(() => this.audioManager.playSound('tokenAdded2', 1.0), 200);
+        setTimeout(() => this.audioManager.playSound('tokenAdded1', 1.0), 400);
+        
+        // Show a help message
+        this.uiManager.showTemporaryMessage("Portal has appeared! Find the GLOWING BLUE platform to escape!");
+    }
+    
+    private findPortalPosition(): THREE.Vector3 {
+        // Use one of the token positions for portal placement
+        // This guarantees the portal will be in an accessible location
+        const mazeSize = this.maze.getMazeSize();
+        
+        // Get a random token position from the tokenManager's positions
+        const tokenPositions = [
+            // Row 1 corridor
+            [3, 0.7, 1],
+            // Middle row
+            [5, 0.7, 5],
+            // Bottom row
+            [7, 0.7, 9]
+        ];
+        
+        // Pick a random position from our predefined positions
+        const randomIndex = Math.floor(Math.random() * tokenPositions.length);
+        const randomPos = tokenPositions[randomIndex];
+        
+        console.log(`Creating portal at position: [${randomPos[0]}, ${randomPos[1]}, ${randomPos[2]}]`);
+        
+        // Convert to world coordinates
+        return this.maze.getWorldPositionFromGridCoordinates(randomPos[0], randomPos[2], randomPos[1] + 0.5);
+    }
+    
     private handleGameCompletion(): void {
         // Set game as completed
         this.gameCompleted = true;
@@ -323,13 +416,25 @@ export class Game {
             this.clipyManager.removeAllClipies();
         }
         
+        // Make sure score reflects all 42 tokens (should be 420 points)
+        // This ensures consistency in case there was a counting issue
+        const tokenCount = this.tokenManager.getTotalTokenCount();
+        const expectedBaseScore = tokenCount * 10;
+        const currentScore = this.phaseManager.getScore();
+        
+        // If score is less than expected for all tokens, adjust it
+        if (currentScore < expectedBaseScore) {
+            console.log(`Adjusting score from ${currentScore} to ${expectedBaseScore} to account for all tokens`);
+            this.phaseManager.setScore(expectedBaseScore);
+        }
+        
         // Show game completion UI
         this.uiManager.showGameCompleteMessage(
             this.phaseManager.getScore(),
             this.difficulty
         );
         
-        console.log("Game completed! All tokens collected!");
+        console.log("Game completed! Player escaped through the portal!");
     }
     
     private updateUI(): void {
@@ -386,6 +491,32 @@ export class Game {
         this.tokenManager.checkTokenCollection(this.player.position);
         this.tokenManager.updateTokenRotations(deltaTime);
         
+        // If all tokens collected, check for portal collision
+        if (this.allTokensCollected && this.portal && this.portalPosition) {
+            // Animate the portal
+            this.animatePortal(deltaTime);
+            
+            // Double-check token collection status to prevent false wins
+            const remainingTokens = this.tokenManager.getRemainingTokenCount();
+            
+            // Only allow game completion if tokens are truly all collected and player reaches portal
+            if (remainingTokens === 0 && this.player.position.distanceTo(this.portalPosition) < this.portalRadius) {
+                console.log("Player entered portal - completing game");
+                this.handleGameCompletion();
+            }
+            // If tokens exist but flag is set, fix the inconsistency
+            else if (remainingTokens > 0) {
+                console.log(`Portal active but ${remainingTokens} tokens still exist - correcting state`);
+                this.allTokensCollected = false;
+                
+                // Remove portal
+                if (this.portal) {
+                    this.scene.remove(this.portal);
+                    this.portal = null;
+                }
+            }
+        }
+        
         // Update Survival phase if active
         if (this.phaseManager.isSurvivalPhaseActive()) {
             this.phaseManager.updateSurvivalPhase();
@@ -417,6 +548,8 @@ export class Game {
     }
     
     public resetGame(fullReset: boolean = false): void {
+        console.log("Reset game called - full reset:", fullReset);
+        
         // Unpause in case we were paused
         this.isPaused = false;
         
@@ -433,8 +566,28 @@ export class Game {
         // Remove any Clipy enemies
         this.clipyManager.removeAllClipies();
         
+        // Remove the portal if it exists
+        if (this.portal) {
+            this.scene.remove(this.portal);
+            this.portal = null;
+            this.portalPosition = null;
+        }
+        
+        // Reset token collection flag
+        this.allTokensCollected = false;
+        
+        // Reset the tokens - add missing tokens back to the scene
+        console.log("Game reset: Resetting tokens");
+        this.tokenManager.reset();
+        
         // Always reset the score and stage for proper reset
         this.phaseManager.reset();
+        
+        // Double-check that score is actually zero
+        if (this.phaseManager.getScore() !== 0) {
+            console.log("Force resetting score to zero");
+            this.phaseManager.resetScore();
+        }
         
         if (fullReset) {
             // Full reset additional steps
@@ -448,6 +601,18 @@ export class Game {
         
         // Update UI after reset
         this.updateUI();
+        
+        // Verify token state is correct after reset
+        const tokenCount = this.tokenManager.getTokenCount();
+        const expectedCount = this.tokenManager.getTotalTokenCount();
+        console.log(`After reset: ${tokenCount} of ${expectedCount} tokens exist`);
+        if (tokenCount !== expectedCount) {
+            console.error("Token count mismatch after reset - forcing reinitialize");
+            this.tokenManager.reset();
+        }
+        
+        // Force a score callback with zero to ensure Svelte component updates
+        this.onScoreUpdate(0);
     }
     
     public pauseGame(): void {
@@ -553,5 +718,36 @@ export class Game {
         
         // Tell the monster manager to add these additional clones
         this.monsterManager.addAdditionalMonsters(additionalPositions);
+    }
+    
+    private animatePortal(deltaTime: number): void {
+        if (!this.portal) return;
+        
+        // Rotate the portal for a spinning effect
+        this.portal.rotation.z += deltaTime * 3.0;
+        
+        // Make the portal pulse by scaling it
+        const pulseFactor = 0.2;
+        const pulseSpeed = 3.0;
+        const scaleOffset = Math.sin(performance.now() * 0.001 * pulseSpeed) * pulseFactor;
+        this.portal.scale.set(1 + scaleOffset, 1, 1 + scaleOffset);
+        
+        // Make the portal hover up and down slightly
+        const hoverHeight = 0.3;
+        const hoverSpeed = 1.5;
+        const heightOffset = Math.sin(performance.now() * 0.001 * hoverSpeed) * hoverHeight;
+        this.portal.position.y = this.portalPosition!.y + heightOffset;
+        
+        // Animate the portal material for a stronger glowing effect
+        if (this.portal.material instanceof THREE.MeshStandardMaterial) {
+            const emissiveIntensity = 2.5 + Math.sin(performance.now() * 0.003) * 1.5;
+            this.portal.material.emissiveIntensity = emissiveIntensity;
+            
+            // Cycle the portal color for extra visibility
+            const r = 0.3 + 0.7 * Math.sin(performance.now() * 0.001);
+            const g = 0.7 + 0.3 * Math.sin(performance.now() * 0.002);
+            const b = 0.7 + 0.3 * Math.cos(performance.now() * 0.001);
+            this.portal.material.emissive.setRGB(r, g, b);
+        }
     }
 } 

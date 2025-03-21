@@ -92,6 +92,20 @@ export class TokenManager {
     }
     
     private initializeTokens(): void {
+        // Double-check if we've already initialized tokens
+        if (this.tokens.length > 0) {
+            console.warn("initializeTokens called when tokens already exist - cleaning up first");
+            // Remove any existing tokens
+            this.tokens.forEach(token => this.scene.remove(token));
+            this.tokens = [];
+        }
+        
+        // Double-check that tokenPositions are properly defined
+        if (this.tokenPositions.length === 0) {
+            console.warn("No token positions defined - calling setupTokenPositions");
+            this.setupTokenPositions();
+        }
+        
         // If we have the loaded model, use it, otherwise fallback to simple geometry
         if (this.tokenModel) {
             this.tokenPositions.forEach(pos => {
@@ -132,6 +146,9 @@ export class TokenManager {
         
         // Double-check that we've created the correct number of tokens
         console.log(`Created ${this.tokens.length} tokens of ${this.totalTokenCount}`);
+        if (this.tokens.length !== this.totalTokenCount) {
+            console.error(`Token count mismatch - expected ${this.totalTokenCount} but created ${this.tokens.length}`);
+        }
     }
     
     public updateTokenRotations(deltaTime: number): void {
@@ -204,11 +221,32 @@ export class TokenManager {
     }
     
     public reset(): void {
+        console.log(`TokenManager reset: Removing ${this.tokens.length} tokens from scene`);
+        
         // Remove existing tokens
-        this.tokens.forEach(token => this.scene.remove(token));
+        this.tokens.forEach(token => {
+            if (token.parent) {
+                this.scene.remove(token);
+            }
+        });
         this.tokens = [];
         
+        console.log('TokenManager reset: Reinitializing tokens');
         // Reinitialize tokens
         this.initializeTokens();
+        
+        // Verify token count after reset
+        const count = this.tokens.length;
+        if (count !== this.totalTokenCount) {
+            console.error(`Token reset failed: Created ${count} of ${this.totalTokenCount} tokens`);
+            
+            // Try once more with a fresh token positions setup
+            this.tokens.forEach(token => this.scene.remove(token));
+            this.tokens = [];
+            this.setupTokenPositions();
+            this.initializeTokens();
+            
+            console.log(`Second token initialization attempt: ${this.tokens.length} of ${this.totalTokenCount}`);
+        }
     }
 } 

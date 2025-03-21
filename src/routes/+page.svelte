@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
     import { Game } from '../lib/game/Game';
-    import ErrorDialog from '../lib/components/ErrorDialog.svelte';
+    //import ErrorDialog from '../lib/components/ErrorDialog.svelte';
     import MenuScene from '../lib/components/MenuScene.svelte';
     import PauseOverlay from '../lib/components/PauseOverlay.svelte';
 
@@ -44,6 +44,9 @@
     }
 
     function handlePlayerCaught() {
+        // Reset score immediately to ensure UI is consistent
+        score = 0;
+        
         // Show error dialog
         errorDialogVisible = true;
         
@@ -70,13 +73,17 @@
     }
     
     function handleIgnore() {
-        // Update the local score to match game's score
+        // Explicitly reset the score to zero in both the game and local state
         if (game) {
-            score = game.getScore();
+            // Force game to reset with full reset
+            game.resetGame(true);
+            
+            // Update our local score to 0
+            score = 0;
         }
         
         // Just close the dialog and resume at current position
-        // Resume the game first to prevent any race conditions
+        // Resume the game after reset
         game.resumeGame();
         
         // Hide the error dialog
@@ -103,6 +110,7 @@
                 gameContainer, 
                 (newScore: number) => {
                     // Always update our local score to match the game's score
+                    console.log(`Score callback triggered: ${newScore}`);
                     score = newScore;
                     
                     // Update token display
@@ -323,12 +331,12 @@
     <PauseOverlay visible={gamePaused} />
 {/if}
 
-<ErrorDialog 
+<!--<ErrorDialog 
     bind:visible={errorDialogVisible}
     on:abort={handleAbort}
     on:retry={handleRetry}
     on:ignore={handleIgnore}
-/>
+/>-->
 
 <style>
     main {

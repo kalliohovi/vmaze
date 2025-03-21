@@ -214,7 +214,7 @@ export class UIManager {
     }
     
     public showGameCompleteMessage(score: number, difficulty: string): void {
-        // Remove any existing overlays first
+        // Remove any existing overlay
         const existingOverlay = document.getElementById('game-overlay');
         if (existingOverlay && existingOverlay.parentNode) {
             existingOverlay.parentNode.removeChild(existingOverlay);
@@ -238,22 +238,35 @@ export class UIManager {
         overlay.style.zIndex = '1000';
         
         const title = document.createElement('h1');
-        title.textContent = '🎮 GAME COMPLETE! 🎮';
+        title.textContent = ' Jensen Clones Escape!';
         title.style.fontSize = '36px';
         title.style.marginBottom = '20px';
         overlay.appendChild(title);
         
         const message = document.createElement('p');
-        message.textContent = `Congratulations! You've collected all 42 tokens and escaped the Jensen clones!`;
+        message.textContent = `Congratulations! You've collected all 42 tokens and escaped through the portal!`;
         message.style.fontSize = '18px';
         message.style.marginBottom = '10px';
         overlay.appendChild(message);
+        
+        const baseScore = 420; // 42 tokens × 10 points
+        const bonusScore = score - baseScore > 0 ? score - baseScore : 0;
         
         const scoreText = document.createElement('p');
         scoreText.textContent = `Final Score: ${score}`;
         scoreText.style.fontSize = '24px';
         scoreText.style.marginBottom = '10px';
         overlay.appendChild(scoreText);
+        
+        // If there was a survival bonus, show it
+        if (bonusScore > 0) {
+            const scoreBreakdown = document.createElement('p');
+            scoreBreakdown.innerHTML = `Tokens: 420 pts<br>Survival Bonus: ${bonusScore} pts`;
+            scoreBreakdown.style.fontSize = '16px';
+            scoreBreakdown.style.marginBottom = '10px';
+            scoreBreakdown.style.color = '#aaffaa';
+            overlay.appendChild(scoreBreakdown);
+        }
         
         const difficultyText = document.createElement('p');
         difficultyText.textContent = `Difficulty: ${difficulty}`;
@@ -335,5 +348,42 @@ export class UIManager {
     // Add a cleanup method for when the game is destroyed/reset
     public cleanup(): void {
         this.cleanupExistingElements();
+    }
+    
+    // Add method to show temporary messages
+    public showTemporaryMessage(message: string, duration: number = 3000): void {
+        // Remove any existing temporary message
+        const existingMessage = document.getElementById('temp-message');
+        if (existingMessage && existingMessage.parentNode) {
+            existingMessage.parentNode.removeChild(existingMessage);
+        }
+        
+        // Create message element
+        const messageElement = document.createElement('div');
+        messageElement.id = 'temp-message';
+        messageElement.textContent = message;
+        messageElement.style.position = 'fixed';
+        messageElement.style.top = '30%';
+        messageElement.style.left = '50%';
+        messageElement.style.transform = 'translateX(-50%)';
+        messageElement.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        messageElement.style.color = '#ffffff';
+        messageElement.style.padding = '15px';
+        messageElement.style.borderRadius = '5px';
+        messageElement.style.fontSize = '18px';
+        messageElement.style.fontFamily = 'monospace';
+        messageElement.style.textAlign = 'center';
+        messageElement.style.zIndex = '1000';
+        messageElement.style.boxShadow = '0 0 10px rgba(255, 255, 255, 0.5)';
+        
+        // Add to document
+        document.body.appendChild(messageElement);
+        
+        // Auto-remove after duration
+        setTimeout(() => {
+            if (messageElement.parentNode) {
+                messageElement.parentNode.removeChild(messageElement);
+            }
+        }, duration);
     }
 } 

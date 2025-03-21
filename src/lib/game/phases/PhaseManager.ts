@@ -40,6 +40,11 @@ export class PhaseManager {
         return this.score;
     }
     
+    public setScore(newScore: number): void {
+        this.score = Math.min(this.maxScore, newScore);
+        this.callbacks.onScoreUpdate(this.score);
+    }
+    
     public getMaxScore(): number {
         return this.maxScore;
     }
@@ -205,6 +210,7 @@ export class PhaseManager {
     }
     
     public reset(): void {
+        console.log("PhaseManager reset called - forcing score to 0");
         this.resetScore();
         this.resetStage();
         
