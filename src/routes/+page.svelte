@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { Game } from '../lib/game/Game';
     import ErrorDialog from '../lib/components/ErrorDialog.svelte';
     import MenuScene from '../lib/components/MenuScene.svelte';
@@ -18,9 +18,12 @@
     let sprintAvailable: boolean = false;
     let sprintEnergy: number = 0;
     
-    // Add Cliby phase state
-    let clibyPhaseActive: boolean = false;
-    let clibyPhaseTimeRemaining: number = 0;
+    // Add Survival phase state
+    let survivalPhaseActive: boolean = false;
+    let survivalPhaseTimeRemaining: number = 0;
+    
+    // Animation frame handle for cleanup
+    let animationFrameHandle: number | null = null;
     
     // Format time as MM:SS
     function formatTime(seconds: number): string {
@@ -51,18 +54,33 @@
         // Go back to menu
         showMenu = true;
         
-        // Full reset of the game would happen when starting a new game
+        // Clean up the game when going back to menu
+        cleanupGame();
     }
     
     function handleRetry() {
         // Reset player and monster positions, score, stages, and tokens
         game.resetGame(true);
+        
+        // Also update our local score state to match game's reset
+        score = 0;
+        
+        // Hide the error dialog
+        errorDialogVisible = false;
     }
     
     function handleIgnore() {
+        // Update the local score to match game's score
+        if (game) {
+            score = game.getScore();
+        }
+        
         // Just close the dialog and resume at current position
         // Resume the game first to prevent any race conditions
         game.resumeGame();
+        
+        // Hide the error dialog
+        errorDialogVisible = false;
     }
     
     function handleStartGame(event) {
@@ -77,11 +95,19 @@
     
     function initGame() {
         if (gameContainer) {
+            // Ensure any previous game instance is cleaned up
+            cleanupGame();
+            
             // Initialize game with selected difficulty
             game = new Game(
                 gameContainer, 
                 (newScore: number) => {
+                    // Always update our local score to match the game's score
                     score = newScore;
+                    
+                    // Update token display
+                    const tokenProgress = game.getTokenProgress();
+                    totalTokens = tokenProgress.total;
                 }, 
                 (rotation: number) => {
                     updateDirection(rotation);
@@ -95,8 +121,8 @@
                     updateStageUI();
                 },
                 (active: boolean, timeRemaining: number) => {
-                    clibyPhaseActive = active;
-                    clibyPhaseTimeRemaining = timeRemaining;
+                    survivalPhaseActive = active;
+                    survivalPhaseTimeRemaining = timeRemaining;
                 }
             );
             game.start();
@@ -124,6 +150,14 @@
                 // Prevent spacebar from scrolling the page
                 event.preventDefault();
             }
+            
+            // Handle escape key to show menu
+            if (event.code === 'Escape' && !gamePaused) {
+                gamePaused = true;
+                if (game) {
+                    game.pauseGame();
+                }
+            }
         }
     }
     
@@ -133,7 +167,7 @@
             // Show special message for impossible mode
             const messageBox = document.querySelector('.message-box');
             if (messageBox) {
-                messageBox.textContent = "FATAL ERROR: You selected IMPOSSIBLE mode. The Jensen clones have been enhanced with wall-phasing technology. You WILL be terminated.";
+                messageBox.textContent = "FATAL ERROR: You selected IMPOSSIBLE mode. The Jensen clones have been enhanced with wall-phasing technology. THERE IS NO ESCAPE. YOU WILL BE TERMINATED.";
             }
             
             // Update the difficulty display with a special class
@@ -153,7 +187,7 @@
         }
         
         // Schedule next update
-        requestAnimationFrame(updateSprintInfo);
+        animationFrameHandle = requestAnimationFrame(updateSprintInfo);
     }
     
     // Add a function to update UI when stage changes
@@ -162,18 +196,36 @@
         if (currentStage === 2) {
             const messageBox = document.querySelector('.message-box');
             if (messageBox) {
-                messageBox.textContent = "WARNING: Anomaly detected! Cliby entities have entered the maze! Press SHIFT to sprint.";
+                messageBox.textContent = "WARNING: Security breach detected! More Jensen clones have entered the maze! Press SHIFT to sprint.";
             }
+        }
+    }
+    
+    // Function to clean up the game instance
+    function cleanupGame() {
+        if (game) {
+            // Call game's dispose method
+            game.dispose();
+            game = null;
+        }
+        
+        // Cancel animation frame
+        if (animationFrameHandle !== null) {
+            cancelAnimationFrame(animationFrameHandle);
+            animationFrameHandle = null;
         }
     }
 
     onMount(() => {
         // Don't automatically start the game, wait for menu selection
+    });
+    
+    onDestroy(() => {
+        // Clean up resources when component is destroyed
+        cleanupGame();
         
-        // Clean up the key listener when component is unmounted
-        return () => {
-            window.removeEventListener('keydown', handleKeyDown);
-        };
+        // Remove key listener
+        window.removeEventListener('keydown', handleKeyDown);
     });
 </script>
 
@@ -197,15 +249,15 @@
                 </div>
                 <div class="score-display">SCORE: {score}</div>
                 <div class="stage-display">STAGE: {currentStage}</div>
-                {#if clibyPhaseActive}
-                <div class="cliby-timer">SURVIVE: {formatTime(clibyPhaseTimeRemaining)}</div>
+                {#if survivalPhaseActive}
+                <div class="survival-timer">SURVIVE: {formatTime(survivalPhaseTimeRemaining)}</div>
                 {/if}
                 <div class="difficulty-display">LEVEL: {gameDifficulty}</div>
             </div>
             
             <div class="side-bar left">
                 <div class="character-portrait"> 
-                    <div class="portrait-frame {clibyPhaseActive ? 'cliby-active' : ''}"></div>
+                    <div class="portrait-frame"></div>
                 </div>
                 <div class="stats">
                     <div class="stat-bar">
@@ -240,19 +292,16 @@
                 </div>
                 <div class="items">
                     <div class="item">TOKENS: {score/10}/{totalTokens}</div>
-                    <div class="item danger">JENSEN CLONES: 3</div>
-                    {#if clibyPhaseActive}
-                    <div class="item anomaly pulsing">CLIBY ANOMALIES: 3</div>
-                    {/if}
+                    <div class="item danger">JENSEN CLONES: {survivalPhaseActive ? 6 : 3}</div>
                 </div>
             </div>
             
             <div class="bottom-bar">
                 <div class="message-box">
                     {#if gameDifficulty === "Impossible"}
-                        FATAL ERROR: You selected IMPOSSIBLE mode. The Jensen clones have been enhanced with wall-phasing technology. You WILL be terminated.
-                    {:else if clibyPhaseActive}
-                        CRITICAL ALERT: Cliby anomalies detected! Survive for {formatTime(clibyPhaseTimeRemaining)} to stabilize the maze! Press SHIFT to sprint.
+                        FATAL ERROR: You selected IMPOSSIBLE mode. The Jensen clones have been enhanced with wall-phasing technology. THERE IS NO ESCAPE. YOU WILL BE TERMINATED.
+                    {:else if survivalPhaseActive}
+                        CRITICAL ALERT: More Jensen clones detected! Survive for {formatTime(survivalPhaseTimeRemaining)} to stabilize the maze! Press SHIFT to sprint.
                     {:else}
                         DANGER: Jensen clones are hunting you! Use the wide corridors to evade them and collect all tokens to escape!
                     {/if}
@@ -428,19 +477,6 @@
         transition: all 0.3s ease;
     }
 
-    .portrait-frame.cliby-active {
-        background-image: url('/static/images/cliby-profile-64.png');
-        border-color: #800080;
-        box-shadow: 0 0 10px #ff00ff;
-        animation: portrait-pulse 2s infinite;
-    }
-
-    @keyframes portrait-pulse {
-        0% { border-color: #800080; }
-        50% { border-color: #ff00ff; }
-        100% { border-color: #800080; }
-    }
-
     .stats {
         width: 100%;
     }
@@ -530,11 +566,7 @@
         text-shadow: 0 0 5px #ff0000;
     }
 
-    .item.anomaly {
-        color: #ff80ff;
-        border-color: #800080;
-        text-shadow: 0 0 5px #ff00ff;
-    }
+
 
     .bottom-bar {
         grid-area: bottom;
@@ -620,27 +652,32 @@
         margin-top: 3px;
     }
 
-    .cliby-timer {
-        font-family: 'Courier New', monospace;
-        font-size: 18px;
-        font-weight: bold;
-        color: #ff80ff;
-        text-shadow: 0 0 5px #ff00ff;
-        background-color: #111;
+    .survival-timer {
+        position: absolute;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
         padding: 5px 10px;
-        border-radius: 3px;
-        border: 2px solid #800080;
-        margin-right: 10px;
-        animation: pulse 1s infinite;
+        background-color: rgba(255, 0, 0, 0.7);
+        color: white;
+        font-family: "VT323", monospace;
+        font-size: 1.5rem;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(255, 0, 0, 0.7);
+        text-shadow: 0 0 5px #fff;
+        animation: blink 1s infinite;
     }
     
-    .pulsing {
-        animation: pulse 1s infinite;
-    }
     
     @keyframes pulse {
         0% { opacity: 1; }
         50% { opacity: 0.7; }
+        100% { opacity: 1; }
+    }
+    
+    @keyframes blink {
+        0% { opacity: 1; }
+        50% { opacity: 0.6; }
         100% { opacity: 1; }
     }
 </style> 
