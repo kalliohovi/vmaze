@@ -277,7 +277,7 @@ export class Game {
         switch (this.difficulty) {
             case "Easy":
                 // Slower monsters, faster player
-                this.monsterManager.setMonsterSpeed(1.0);
+                this.monsterManager.setMonsterSpeed(2.0);
                 this.player.speed = 6.0;
                 break;
                 

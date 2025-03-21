@@ -238,7 +238,7 @@ export class UIManager {
         overlay.style.zIndex = '1000';
         
         const title = document.createElement('h1');
-        title.textContent = ' Jensen Clones Escape!';
+        title.textContent = ' VMaze Escape!';
         title.style.fontSize = '36px';
         title.style.marginBottom = '20px';
         overlay.appendChild(title);
